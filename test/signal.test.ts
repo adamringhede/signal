@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest'
-import { signal, computed, effect, Signal } from '../src'
+import { signal, computed, effect, Signal, batchSet } from '../src'
 
 test('signal getter', () => {
   const s = signal(5)
@@ -61,4 +61,24 @@ test('update', () => {
   expect(a()).toEqual(1)
   a.update(value => value + 1)
   expect(a()).toEqual(2)
+})
+
+
+test('batch', () => {
+  const a = signal(1)
+  const b = signal(1)
+  
+  let effectResult: number[] = []
+  const e = effect(() => effectResult.push(a() + b()))
+
+  expect(effectResult).toEqual([2])
+
+  // Batch signal updates so effect only trigger once
+  batchSet(() => {
+    a.set(2)
+    b.set(3)  
+  })
+  
+  expect(effectResult).toEqual([2, 5])
+
 })

@@ -1,1 +1,1 @@
-export { Signal, WritableSignal, signal, computed, effect } from './signal'
+export { Signal, WritableSignal, signal, computed, effect, batchSet } from './signal'

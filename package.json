@@ -1,7 +1,11 @@
 {
   "name": "@adamringhede/signal",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "main": "dist/index.js",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/adamringhede/signal.git"
+  },
   "scripts": {
     "build": "tsup --dts",
     "test": "vitest run",

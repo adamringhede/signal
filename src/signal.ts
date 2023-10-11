@@ -6,8 +6,10 @@ export type WritableSignal<T> = {
   mutate(mutateFn: (value: T) => void): void
 } & Signal<T>
 
+
+type EffectTrigger = () => void
 type EffectContext = {
-  trigger: () => void
+  trigger: EffectTrigger
   onDestroy: (() => void)[] 
   options?: EffectOptions
 }
@@ -16,6 +18,12 @@ type ComputedContext = {
   cacheInvalidation: () => void
 }
 
+type BatchContext = {
+  // a reference to all unique trigger functions
+  triggers: Set<EffectTrigger>
+}
+
+const batchContextStack: BatchContext[] = []
 const computedContextStack: ComputedContext[] = []
 let effectContext: EffectContext|undefined
 
@@ -43,6 +51,11 @@ export function signal<T>(value: T): WritableSignal<T> {
     }
     cacheInvalidators.forEach((fn) => fn())
     current = updated
+    if (batchContextStack.length > 0) {
+      const batchContext = batchContextStack[batchContextStack.length-1]
+      triggers.forEach(trigger => batchContext.triggers.add(trigger))
+      return
+    }
     triggers.forEach((fn) => fn())
   }
   const update = (updateFn: (value: T) => T) => {
@@ -93,4 +106,14 @@ export function effect(fn: () => void, options?: EffectOptions): EffectRef {
       onDestroy?.forEach(cb => cb())
     }
   }
+}
+
+export function batchSet(fn: () => void) {
+  const context: BatchContext = {
+    triggers: new Set()
+  }
+  batchContextStack.push(context)
+  fn()
+  batchContextStack.pop()
+  context.triggers.forEach(t => t())
 }
