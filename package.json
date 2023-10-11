@@ -1,0 +1,25 @@
+{
+  "name": "@adamringhede/signal",
+  "version": "1.0.0",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsup --dts",
+    "test": "vitest run",
+    "start": "vitest"
+  },
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "devDependencies": {
+    "tsup": "^7.1.0",
+    "vitest": "^0.34.6"
+  },
+  "tsup": {
+    "entry": [
+      "src/index.ts"
+    ],
+    "splitting": false,
+    "sourcemap": true,
+    "clean": true
+  }
+}
