@@ -82,3 +82,19 @@ test('batch', () => {
   expect(effectResult).toEqual([2, 5])
 
 })
+
+
+test('multiple effects on a computed value has te same result', () => {
+  const s = signal(5)
+  const c = computed(() => s() + 3)
+  const result: number[] = []
+  const result2: number[] = []
+  const result3: number[] = []
+  const e = effect(() => result.push(c()))
+  const e2 = effect(() => result2.push(c()))
+  const e3 = effect(() => result3.push(c()))
+  s.set(9)
+  s.set(10)
+  expect(result).toEqual(result2)
+  expect(result2).toEqual(result3)
+})

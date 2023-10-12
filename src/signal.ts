@@ -15,7 +15,9 @@ type EffectContext = {
 }
 
 type ComputedContext = {
-  cacheInvalidation: () => void
+  cacheInvalidation: () => void,
+  // Set by signal
+  onLateEffects?: ((ectx: EffectContext) => void)[] 
 }
 
 type BatchContext = {
@@ -38,8 +40,16 @@ export function signal<T>(value: T): WritableSignal<T> {
       effectContext.onDestroy.push(() => triggers.splice(triggers.indexOf(trigger), 1))
     }
       
-    if (computedContextStack.length > 0) 
-      cacheInvalidators.push(...computedContextStack.map(ctx => ctx.cacheInvalidation))
+    if (computedContextStack.length > 0) {
+      for (const ctx of computedContextStack) {
+        cacheInvalidators.push(ctx.cacheInvalidation)
+        ctx.onLateEffects?.push(ectx => {
+          const trigger = ectx.trigger
+          triggers.push(trigger)
+          ectx.onDestroy.push(() => triggers.splice(triggers.indexOf(trigger), 1))
+        })
+      }
+    } 
     return current 
   }
   const set = (updated: T) => {
@@ -71,13 +81,19 @@ export function signal<T>(value: T): WritableSignal<T> {
 export function computed<R>(fn: () => R): Signal<R> {
   let hasCache = false
   let cached: R|undefined
-  const context = {
+  const context: ComputedContext = {
     cacheInvalidation: () => {
       hasCache = false
-    }
+    },
+    onLateEffects: []
   }
   return () => {
     if (hasCache) {
+      // if this is being called in any new effect, then 
+      // new trigger functions need to be added
+      if (effectContext) {
+        context.onLateEffects?.forEach(callback => callback(effectContext!)) 
+      }
       return cached as R
     }
     computedContextStack.push(context)
