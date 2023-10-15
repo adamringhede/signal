@@ -49,8 +49,7 @@ test('mutate', () => {
 
   a.mutate(value => value.foo = 2)
 
-  // Mutating changes the first value but does not trigger effects again
-  expect(effectResult).toEqual([{foo: 2}])
+  expect(effectResult).toEqual([{foo: 2}, {foo: 2}])
 
   e.destroy()
 })
@@ -97,4 +96,61 @@ test('multiple effects on a computed value has te same result', () => {
   s.set(10)
   expect(result).toEqual(result2)
   expect(result2).toEqual(result3)
+})
+
+
+test('using signal multiple times in an effect only triggers it once', () => {
+  const s = signal(1)
+  const c = computed(() => s() * 2)
+  const result: number[] = []
+  const e = effect(() => {
+    c() // Should have no effect
+    result.push(c())
+  })
+  s.set(2)
+  expect(result).toEqual([2,4])
+})
+
+test('nesting computed', () => {
+  const a = signal(5)
+  const b = signal(10) 
+  const d = computed(() => {
+    const c = computed(() => {
+      return b() * 2
+    })
+    return a() + c()
+  })
+
+  expect(d()).toEqual(25)
+  a.set(4)
+  expect(d()).toEqual(24)
+  b.set(15)
+  expect(d()).toEqual(34)
+})
+
+
+test('nesting effect', () => {
+  const a = signal(5)
+  const b = signal(10) 
+  const result1: number[] = []
+  const result2: number[] = []
+  const e1 = effect(() => {
+    result1.push(a())
+    
+    // By nesting effects twice, they will be kept around forever.
+    // A way around that could be for an effect to destroy previous ones
+    // Like if an effect is defined inside of another, the parent one will keep track of it.
+    // Next time the parent is triggered, it will first destroy all previous ones.
+    const e2 = effect(() => {
+      result2.push(b())
+    })
+  })
+
+  console.log( {result1, result2})
+  a.set(4)
+  console.log( {result1, result2})
+
+  b.set(15)
+  console.log( {result1, result2})
+
 })

@@ -6,6 +6,10 @@ export type WritableSignal<T> = {
   mutate(mutateFn: (value: T) => void): void
 } & Signal<T>
 
+export type ValueEqualityFn<T> = (a: T, b: T) => boolean;
+export type CreateSignalOptions<T> = {
+  equal?: ValueEqualityFn<T>
+}
 
 type EffectTrigger = () => void
 type EffectContext = {
@@ -27,17 +31,18 @@ type BatchContext = {
 
 const batchContextStack: BatchContext[] = []
 const computedContextStack: ComputedContext[] = []
-let effectContext: EffectContext|undefined
+const effectContextStack: EffectContext[] = []
 
-export function signal<T>(value: T): WritableSignal<T> {
+export function signal<T>(value: T, options?: CreateSignalOptions<T>): WritableSignal<T> {
   let current = value
-  const triggers: (()=>void)[] = []
+  const triggers = new Set<EffectTrigger>()
   const cacheInvalidators: (()=>void)[] = []
   const getter = function () {
+    const effectContext = effectContextStack[effectContextStack.length-1]
     if (effectContext != null) {
       const trigger = effectContext.trigger
-      triggers.push(trigger)
-      effectContext.onDestroy.push(() => triggers.splice(triggers.indexOf(trigger), 1))
+      triggers.add(trigger)
+      effectContext.onDestroy.push(() => triggers.delete(trigger))
     }
       
     if (computedContextStack.length > 0) {
@@ -45,22 +50,16 @@ export function signal<T>(value: T): WritableSignal<T> {
         cacheInvalidators.push(ctx.cacheInvalidation)
         ctx.onLateEffects?.push(ectx => {
           const trigger = ectx.trigger
-          triggers.push(trigger)
-          ectx.onDestroy.push(() => triggers.splice(triggers.indexOf(trigger), 1))
+          triggers.add(trigger)
+          ectx.onDestroy.push(() => triggers.delete(trigger))
         })
       }
     } 
     return current 
   }
-  const set = (updated: T) => {
-    if (effectContext != null && effectContext.options?.allowSignalWrites !== true) {
-      throw "Can't update a signal from an effect"
-    }
-    if (updated === current) {
-      return
-    }
+  const isEqual = options?.equal ?? ((a: T, b: T) => a === b)
+  const propagateChanges = () => {
     cacheInvalidators.forEach((fn) => fn())
-    current = updated
     if (batchContextStack.length > 0) {
       const batchContext = batchContextStack[batchContextStack.length-1]
       triggers.forEach(trigger => batchContext.triggers.add(trigger))
@@ -68,12 +67,23 @@ export function signal<T>(value: T): WritableSignal<T> {
     }
     triggers.forEach((fn) => fn())
   }
+  const set = (updated: T) => {
+    const effectContext = effectContextStack[effectContextStack.length-1]
+    if (effectContext != null && effectContext.options?.allowSignalWrites !== true) {
+      throw "Can't update a signal from an effect"
+    }
+    if (isEqual(updated, current)) {
+      return
+    }
+    current = updated
+    propagateChanges()
+  }
   const update = (updateFn: (value: T) => T) => {
     set(updateFn(current))
   }
   const mutate = (mutateFn: (value: T) => void) => {
     mutateFn(current)
-    set(current)
+    propagateChanges()
   }
   return Object.assign(getter, { set, update, mutate })
 }
@@ -91,6 +101,7 @@ export function computed<R>(fn: () => R): Signal<R> {
     if (hasCache) {
       // if this is being called in any new effect, then 
       // new trigger functions need to be added
+      const effectContext = effectContextStack[effectContextStack.length-1]
       if (effectContext) {
         context.onLateEffects?.forEach(callback => callback(effectContext!)) 
       }
@@ -113,10 +124,11 @@ type EffectRef = {
 }
 
 export function effect(fn: () => void, options?: EffectOptions): EffectRef {
-  effectContext = {trigger: fn, onDestroy: [], options}
+  const effectContext: EffectContext = {trigger: fn, onDestroy: [], options}
+  effectContextStack.push(effectContext)
   fn()
   const onDestroy = effectContext.onDestroy
-  effectContext = undefined
+  effectContextStack.pop()
   return {
     destroy() {
       onDestroy?.forEach(cb => cb())
