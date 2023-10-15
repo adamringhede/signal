@@ -136,21 +136,18 @@ test('nesting effect', () => {
   const result2: number[] = []
   const e1 = effect(() => {
     result1.push(a())
-    
-    // By nesting effects twice, they will be kept around forever.
-    // A way around that could be for an effect to destroy previous ones
-    // Like if an effect is defined inside of another, the parent one will keep track of it.
-    // Next time the parent is triggered, it will first destroy all previous ones.
+  
+    // This effect e2 will still be triggered when e1 is triggered.
     const e2 = effect(() => {
       result2.push(b())
     })
   })
 
-  console.log( {result1, result2})
+  expect({result1, result2}).toEqual({ result1: [ 5 ], result2: [ 10 ] })
   a.set(4)
-  console.log( {result1, result2})
-
+  expect({result1, result2}).toEqual({ result1: [ 5, 4 ], result2: [ 10, 10 ] })
   b.set(15)
-  console.log( {result1, result2})
-
+  expect({result1, result2}).toEqual({ result1: [ 5, 4 ], result2: [ 10, 10, 15 ] })
+  b.set(20)
+  expect({result1, result2}).toEqual({ result1: [ 5, 4 ], result2: [ 10, 10, 15, 20 ] })
 })

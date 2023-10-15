@@ -16,6 +16,7 @@ type EffectContext = {
   trigger: EffectTrigger
   onDestroy: (() => void)[] 
   options?: EffectOptions
+  childEffects: EffectRef[]
 }
 
 type ComputedContext = {
@@ -124,16 +125,26 @@ type EffectRef = {
 }
 
 export function effect(fn: () => void, options?: EffectOptions): EffectRef {
-  const effectContext: EffectContext = {trigger: fn, onDestroy: [], options}
+  const parentContext = effectContextStack.length > 0 ? effectContextStack[effectContextStack.length-1] : null
+  const childEffects: EffectRef[] = []
+  const trigger = () => {
+    // Destory any previous effects to avoid subscribing multiple times
+    childEffects.forEach(e => e.destroy())
+    fn()
+  }
+  const effectContext: EffectContext = {trigger, onDestroy: [], options, childEffects}
   effectContextStack.push(effectContext)
   fn()
-  const onDestroy = effectContext.onDestroy
   effectContextStack.pop()
-  return {
+  const effectRef: EffectRef = {
     destroy() {
-      onDestroy?.forEach(cb => cb())
+      effectContext.onDestroy?.forEach(cb => cb())
     }
   }
+  if (parentContext != null) {
+    parentContext.childEffects.push(effectRef)
+  }
+  return effectRef
 }
 
 export function batchSet(fn: () => void) {
